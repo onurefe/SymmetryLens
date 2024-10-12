@@ -1,4 +1,5 @@
-# Symmetry Lens: 
+# Symmetry Lens
+
 Our method combines ideas from multiple fields involving group theory, information theory and signal processing. At the core, our motivation is to learn symmetries of datasets which also leads to a sensible notion of locality. This approach provides us three major benefits:
 
 - Ability to learn symmetries at higher dimensional datasets 
@@ -6,6 +7,10 @@ Our method combines ideas from multiple fields involving group theory, informati
 - Providing natural coordinates to represent data. Such that under some circumstances, our method shows the true nature of data.
 
 Currently, we have tested the method on 33 dimensional datasets and one parameter family of symmetry transformations. However, results are encouraging in terms of stability of learning symmetries which motivates us towards pushing the boundaries of this new symmetry and representation learning paradigm. 
+
+For more details, please refer to our paper:
+
+[SymmetryLens: A new candidate paradigm for unsupervised symmetry learning via locality and equivariance](https://arxiv.org/abs/2410.05232)
 
 ## Table of Contents
 
@@ -123,8 +128,18 @@ Use the learned symmetries to consistently interpret raw data across different s
 ### Flow learning from many-body systems
 Implement flow-based learning techniques to model and understand the dynamics of many-body or ensemble dynamical systems. The symmetry-aware approach ensures that the model captures essential interactions and behaviors inherent in such complex systems.
 
-## License
-This project is licensed under the MIT License.
+## Citation
+If you find this work useful in your research, please consider citing:
+
+@misc{efe2024symmetrylensnewcandidateparadigm,
+      title={SymmetryLens: A new candidate paradigm for unsupervised symmetry learning via locality and equivariance}, 
+      author={Onur Efe and Arkadas Ozakin},
+      year={2024},
+      eprint={2410.05232},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      url={https://arxiv.org/abs/2410.05232}, 
+}
 
 ## Contact
 For any questions, issues, or feature requests, please open an issue on the GitHub repository or contact onur.efe44@gmail.com.
