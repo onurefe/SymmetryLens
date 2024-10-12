@@ -14,7 +14,7 @@ For more details, please refer to our paper:
 
 ## Table of Contents
 
-- [Symmetry Lens:](#symmetry-lens)
+- [Symmetry Lens](#symmetry-lens)
   - [Table of Contents](#table-of-contents)
   - [Installation](#installation)
     - [Prerequisites](#prerequisites)
@@ -28,7 +28,6 @@ For more details, please refer to our paper:
     - [Adapter to CNNs for symmetry conversion](#adapter-to-cnns-for-symmetry-conversion)
     - [Inverse problems in wave propagation](#inverse-problems-in-wave-propagation)
     - [Consistent interpretation of raw data](#consistent-interpretation-of-raw-data)
-  - [License](#license)
   - [Contact](#contact)
 
 ---
@@ -131,6 +130,7 @@ Implement flow-based learning techniques to model and understand the dynamics of
 ## Citation 
 If you find this work useful in your research, please consider citing
 
+```bibtex
 @misc{efe2024symmetrylensnewcandidateparadigm,
       title={SymmetryLens: A new candidate paradigm for unsupervised symmetry learning via locality and equivariance}, 
       author={Onur Efe and Arkadas Ozakin},
@@ -140,6 +140,6 @@ If you find this work useful in your research, please consider citing
       primaryClass={cs.LG},
       url={https://arxiv.org/abs/2410.05232}, 
 }
-
+```
 ## Contact
 For any questions, issues, or feature requests, please open an issue on the GitHub repository or contact onur.efe44@gmail.com.
