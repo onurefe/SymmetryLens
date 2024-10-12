@@ -40,22 +40,31 @@ class SyntheticDataGenerator:
                 
             if feature["type"] == "gaussian":
                 x_feature = self.lot_gaussians(num_samples,
-                                                center_min, 
-                                                center_max, 
-                                                feature["scale_min"],
-                                                feature["scale_max"],
-                                                feature["amplitude_min"],
-                                                feature["amplitude_max"])
+                                                center_min=center_min, 
+                                                center_max=center_max, 
+                                                sigma_min=feature["scale_min"],
+                                                sigma_max=feature["scale_max"],
+                                                amplitude_min=feature["amplitude_min"],
+                                                amplitude_max=feature["amplitude_max"])
+            elif feature["type"] == "dispersed_gaussian":
+                x_feature = self.lot_dispersed_gaussian(num_samples,
+                                                        center_min=center_min, 
+                                                        center_max=center_max,
+                                                        sigma_min=feature["scale_min"],
+                                                        sigma_max=feature["scale_max"],
+                                                        amplitude_min=feature["amplitude_min"],
+                                                        amplitude_max=feature["amplitude_max"],
+                                                        phase_velocity_coeffs=feature["phase_velocity_coeffs"])
             elif feature["type"] == "legendre":
                 x_feature = self.lot_legendre_polynomials(num_samples,
-                                                          center_min, 
-                                                          center_max, 
-                                                          feature["scale_min"],
-                                                          feature["scale_max"],
-                                                          feature["amplitude_min"],
-                                                          feature["amplitude_max"],
-                                                          feature["l"],
-                                                          feature["m"]) 
+                                                          center_min=center_min, 
+                                                          center_max=center_max, 
+                                                          length_min=feature["scale_min"],
+                                                          length_max=feature["scale_max"],
+                                                          amplitude_min=feature["amplitude_min"],
+                                                          amplitude_max=feature["amplitude_max"],
+                                                          l=feature["l"],
+                                                          m=feature["m"]) 
             else:
                 raise ValueError('Feature type is not defined.')
                 
@@ -89,6 +98,25 @@ class SyntheticDataGenerator:
         x = amplitudes * self._gaussian(t, centers, sigmas)
         
         return x
+
+    def lot_dispersed_gaussian(self, 
+                               num_samples, 
+                               center_min, 
+                               center_max, 
+                               sigma_min, 
+                               sigma_max, 
+                               amplitude_min, 
+                               amplitude_max, 
+                               phase_velocity_coeffs=[1., 0., 0.]):
+        centers = np.random.uniform(center_min, center_max, size=[num_samples])
+        sigmas = np.random.uniform(sigma_min, sigma_max, size=[num_samples])
+        amplitudes = np.random.uniform(amplitude_min, amplitude_max, size=[num_samples])
+        centers = np.expand_dims(centers, axis=-1)
+        sigmas = np.expand_dims(sigmas, axis=-1)
+        amplitudes = np.expand_dims(amplitudes, axis=-1)
+        t = np.expand_dims(self.timestep_values, axis=0)
+        x = amplitudes * self._dispersed_gaussian(t, centers, sigmas, phase_velocity_coeffs)
+        return x
     
     def lot_legendre_polynomials(self, num_samples, center_min, center_max, length_min, length_max, amplitude_min, amplitude_max, l, m):
         centers = np.random.uniform(center_min, center_max, size=[num_samples])
@@ -110,6 +138,46 @@ class SyntheticDataGenerator:
         
         x = amplitudes * self._assoc_legendre_reparam_func(t_relative_scaled_clipped, l, m)            
         return x
+
+    def _dispersed_gaussian(self, t, centers, sigmas, phase_velocity_coeffs, num_freqs_for_propagation_estimation=1000):   
+        # Initial wavefunction (Gaussian pulse)
+        dt = t[0, 1] - t[0, 0]
+        fs = 1./dt
+        
+        # Convert gaussian to a frequency domain gaussian for Monte Carlo estimation.
+        f = np.random.uniform(0, fs/2, size=[1, num_freqs_for_propagation_estimation//2])
+        f = np.concatenate([-f[:, ::-1], f], axis=1)
+        f_sigmas = (1.0 / (np.pi * sigmas))
+        psi_0_f = np.exp(-np.square(f) / (2 * f_sigmas**2))
+        psi_0_f = psi_0_f / (np.sqrt(2 * np.pi) * f_sigmas)
+        
+        # Dispersion relation
+        u = self._phase_velocity(f, dt, phase_velocity_coeffs)
+        
+        # Precompute phase factors for each sample, frequency
+        phases = 2 * np.pi * (f / u) * centers
+
+        # Compute psi propagated.
+        psi_propageted_f = psi_0_f * np.exp(1j * phases)
+        
+        # Frequency domain inversion tensor.
+        inversion_tensor = np.exp(1j * 2 * np.pi * f[:, :, np.newaxis] * t[np.newaxis, :])
+        psi_propagated = np.matmul(psi_propageted_f, inversion_tensor[0])
+        psi_propagated = np.real(psi_propagated)
+
+        return psi_propagated
+
+    def _phase_velocity(self, f, dt, phase_velocity_coeffs):
+        f_sampling = 1./dt
+        f_nyquist = f_sampling/2
+        f_abs = np.abs(f)
+        f_abs_normalized = f_abs / f_nyquist
+        
+        result = np.zeros_like(f_abs_normalized)
+        for i, phase_velocity_coeff in enumerate(phase_velocity_coeffs):
+            result = result + phase_velocity_coeff * np.power(f_abs_normalized, i)
+            
+        return result
 
     def _apply_permutation_map(self, x):
         x = np.transpose(x, axes=[0, 2, 1])
@@ -137,13 +205,6 @@ class SyntheticDataGenerator:
         logits = np.where(sample_from_uniform_distribution < self._p_exist, 1.0, 0.0)
         return logits.astype(np.float32)
     
-    def _add_channels_axis(self, features):
-        features = np.expand_dims(features, axis=-1)
-        return features
-
-    def _drop_channels_axis(self, features):
-        return features[..., 0]
-
     def _assoc_legendre_reparam_func(self, x, l, m):
         z = self._assoc_legendre_func(np.sin(0.5 * np.pi * x), l, m)
         return z

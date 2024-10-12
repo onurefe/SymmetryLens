@@ -1,6 +1,6 @@
 import tensorflow as tf
 import numpy as np
-from symmetry_lens.regularizations import RegularizationOrders as ro
+from symmetry_lens import regularizations as ri
 
 def get_ordered_regularizations_coeffs(
     alignment_maximization_reg_coeff=0.0,
@@ -11,25 +11,25 @@ def get_ordered_regularizations_coeffs(
     conditional_probability_estimator_entropy_minimization_reg_coeff=0.0
 ):
     reg_coeffs = [
-        [ro.ALIGNMENT_MAXIMIZATION_REGULARIZATION_ORDER, alignment_maximization_reg_coeff],
+        [ri.ALIGNMENT_MAXIMIZATION_REGULARIZATION_ORDER, alignment_maximization_reg_coeff],
         [
-            ro.UNIFORMITY_MAXIMIZATION_REGULARIZATION_ORDER,
+            ri.UNIFORMITY_MAXIMIZATION_REGULARIZATION_ORDER,
             uniformity_maximization_reg_coeff,
         ],
         [
-            ro.MARGINAL_ENTROPY_MINIMIZATION_REGULARIZATION_ORDER,
+            ri.MARGINAL_ENTROPY_MINIMIZATION_REGULARIZATION_ORDER,
             marginal_entropy_minimization_reg_coeff,
         ],
         [
-            ro.JOINT_ENTROPY_MAXIMIZATION_REGULARIZATION_ORDER,
+            ri.JOINT_ENTROPY_MAXIMIZATION_REGULARIZATION_ORDER,
             joint_entropy_maximization_reg_coeff,
         ],
         [
-            ro.PROBABILITY_ESTIMATOR_REGULARIZATION_ORDER,
+            ri.PROBABILITY_ESTIMATOR_REGULARIZATION_ORDER,
             probability_estimator_entropy_minimization_reg_coeff,
         ],
         [
-            ro.CONDITIONAL_PROBABILITY_ESTIMATOR_REGULARIZATION_ORDER,
+            ri.CONDITIONAL_PROBABILITY_ESTIMATOR_REGULARIZATION_ORDER,
             conditional_probability_estimator_entropy_minimization_reg_coeff
         ]
     ]
@@ -132,26 +132,30 @@ def run_training_step(
     return model_loss, regularizations
 
 
-def log(epoch, step, lr_scaled_normalized_training_time, loss, regularizations):
+def log(epoch, lr_scaled_normalized_training_time, loss, regularizations):
     loss_term_ids = [
-        ro.ALIGNMENT_MAXIMIZATION_REGULARIZATION_ORDER,
-        ro.UNIFORMITY_MAXIMIZATION_REGULARIZATION_ORDER,
-        ro.MARGINAL_ENTROPY_MINIMIZATION_REGULARIZATION_ORDER,
-        ro.JOINT_ENTROPY_MAXIMIZATION_REGULARIZATION_ORDER
+        ri.ALIGNMENT_MAXIMIZATION_REGULARIZATION_ORDER,
+        ri.UNIFORMITY_MAXIMIZATION_REGULARIZATION_ORDER,
+        ri.MARGINAL_ENTROPY_MINIMIZATION_REGULARIZATION_ORDER,
+        ri.JOINT_ENTROPY_MAXIMIZATION_REGULARIZATION_ORDER,
+        ri.PROBABILITY_ESTIMATOR_REGULARIZATION_ORDER,
+        ri.CONDITIONAL_PROBABILITY_ESTIMATOR_REGULARIZATION_ORDER
     ]
     
     loss_term_descriptions = [
         "alignment",
         "uniformity",
         "h_marginal",
-        "h_joint"
+        "h_joint",
+        "p_estimator",
+        "p_cond_estimator"
     ]
 
     regularizations = regularizations.numpy()
     loss_term_ids = np.array(loss_term_ids)
     sorting_idxs = list(np.argsort(loss_term_ids))
 
-    msg = "Epoch: " + str(epoch) + " Step: " + str(step) + ", " 
+    msg = "Epoch: " + str(epoch) + ", " 
     msg = msg + "Normalized time:{:.2f}".format(lr_scaled_normalized_training_time) + ", "
     msg = msg + "Loss:{:.2f}".format(loss) + ", "
 
@@ -186,15 +190,14 @@ def fit(
     lr_scaled_training_steps = 0.0
 
     for epoch in range(epochs):
-        print("\nStart of epoch %d" % (epoch,))
         np.random.seed(epoch)
         np.random.shuffle(dataset)
 
         lr_model = lr_scheduler_model.get_learning_rate(epoch)
         lr_estimators = lr_scheduler_estimators.get_learning_rate(epoch)
 
-        optimizer_model.learning_rate.assign(lr_model)
-        optimizer_estimators.learning_rate.assign(lr_estimators)
+        tf.keras.backend.set_value(optimizer_model.lr, lr_model)
+        tf.keras.backend.set_value(optimizer_estimators.lr, lr_estimators)
 
         for step in range(len(dataset) // batch_size):
             x_batch = dataset[step * batch_size : (step + 1) * batch_size]
@@ -214,12 +217,10 @@ def fit(
                 estimator_loss_coeffs,
             )
 
-            if step % 20 == 0:
-                log(epoch=epoch, 
-                    step=step, 
-                    lr_scaled_normalized_training_time=lr_scaled_normalized_training_time, 
-                    loss=loss, 
-                    regularizations=regularizations)
+        log(epoch=epoch, 
+            lr_scaled_normalized_training_time=lr_scaled_normalized_training_time, 
+            loss=loss, 
+            regularizations=regularizations)
 
         for callback in callbacks:
             callback.on_epoch_end(epoch)

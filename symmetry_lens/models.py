@@ -1,6 +1,9 @@
+import tensorflow as tf
 from tensorflow import keras
-from symmetry_lens.group_correlation_layer import GroupCorrelationLayer
+from symmetry_lens.group_convolution_layer import GroupConvolutionLayer
 
+
+@tf.keras.utils.register_keras_serializable()
 class EquivariantAdapter(keras.Model):
     def __init__(
         self,
@@ -11,17 +14,17 @@ class EquivariantAdapter(keras.Model):
         super(EquivariantAdapter, self).__init__(name=name)
         self._args = args
         self._kwargs = kwargs
-        
+
     def get_config(self):
         config = super(EquivariantAdapter, self).get_config()
         return config
 
     def build(self, input_shape=None):
         self._input_shape = input_shape
-        self._group_correlation_layer = GroupCorrelationLayer(**self._kwargs)
-        
+        self._group_convolution_layer = GroupConvolutionLayer(**self._kwargs)
+
     def call(self, x, lr_scaled_normalized_training_time=None, training=False):
-        y = self._group_correlation_layer(
+        y = self._group_convolution_layer(
             x,
             lr_scaled_normalized_training_time,
             training=training,
@@ -29,11 +32,9 @@ class EquivariantAdapter(keras.Model):
         return y
     
     @property
-    def symmetry_generator(self):
-        return self._group_correlation_layer.generator_unpadded
-    
+    def group_convolution_matrix(self):
+        return self._group_convolution_layer._group_convolution_matrix
+        
     @property
-    def group_correlation_matrix(self):
-        return self._group_correlation_layer.group_correlation_matrix
-        
-        
+    def symmetry_generator(self):
+        return self._group_convolution_layer._generator

@@ -1,38 +1,38 @@
 import tensorflow as tf
-from tensorflow import math as tm
 from numpy import pi
 from symmetry_lens.regularizations import convert_to_regularization_format
 from symmetry_lens.probability_estimator import ProbabilityEstimator
 from symmetry_lens.conditional_probability_estimator import ConditionalProbabilityEstimator
 
-class GroupCorrelationLayer(tf.keras.layers.Layer):
+@tf.keras.utils.register_keras_serializable()
+class GroupConvolutionLayer(tf.keras.layers.Layer):
     def __init__(
         self,
         num_uniformity_scales = 1,
-        resolution_filter_noise_sigma_decay_tc_in_epochs=10.0,
-        resolution_filter_noise_initial_sigma=0.1,
+        resolution_filters_sigma_decay_tc_in_epochs=10.0,
+        resolution_filters_initial_sigma=0.1,
         num_resolution_filters=1,
         steps_per_epoch=200,
         zero_padding_size=None,
-        use_zero_padding=True,
-        name="group_correlation_layer",
+        use_zero_padding=False,
+        name="group_convolution_layer",
         eps=1e-7,
         *args,
         **kwargs
     ):
         self._num_uniformity_scales = num_uniformity_scales
-        self._resolution_filter_noise_sigma_decay_tc_in_epochs = resolution_filter_noise_sigma_decay_tc_in_epochs
-        self._resolution_filter_noise_initial_sigma = resolution_filter_noise_initial_sigma
+        self._resolution_filters_sigma_decay_tc_in_epochs = resolution_filters_sigma_decay_tc_in_epochs
+        self._resolution_filters_initial_sigma = resolution_filters_initial_sigma
         self._steps_per_epoch = steps_per_epoch
         self._num_resolution_filters = num_resolution_filters
         self._use_zero_padding = use_zero_padding
         self._zero_padding_size = zero_padding_size
         self._eps = eps
         
-        super(GroupCorrelationLayer, self).__init__(name=name)
+        super(GroupConvolutionLayer, self).__init__(name=name)
 
     def get_config(self):
-        config = super(GroupCorrelationLayer, self).get_config()
+        config = super(GroupConvolutionLayer, self).get_config()
         return config
 
     def build(self, input_shape=None):
@@ -52,10 +52,10 @@ class GroupCorrelationLayer(tf.keras.layers.Layer):
 
         # Sample resolution_filters and interpolate lifting map.
         resolution_filters = self._sample_resolution_filters()
-        gcm = self._interpolate_group_correlation_matrix(resolution_filters)
+        lm = self._interpolate_group_convolution_matrix(resolution_filters)
 
         # Lift x.
-        y = self._group_correlate(x, gcm)
+        y = self._lift(x, lm)
 
         # Estimate probabilities.
         log_p = self._estimate_patch_probabilities(y, training=True)
@@ -65,7 +65,6 @@ class GroupCorrelationLayer(tf.keras.layers.Layer):
         log_p_conditional = self._estimate_conditional_patch_probabilities(y, training=True)
         log_l_conditional = self._estimate_conditional_patch_probabilities(y, given_patch_shift=-1, estimated_patch_shift=-1) 
         log_r_conditional = self._estimate_conditional_patch_probabilities(y, given_patch_shift=1, estimated_patch_shift=1)
-        
         
         self._increase_step_counter()
 
@@ -240,14 +239,14 @@ class GroupCorrelationLayer(tf.keras.layers.Layer):
 
         return mask
     
-    def _group_correlate(self, x, lm):
+    def _lift(self, x, lm):
         x = self._swap_timestep_and_channel_axes(x)
         y = tf.matmul(x, lm)
         y = self._swap_timestep_and_channel_axes(y)
         return y
 
-    def _interpolate_group_correlation_matrix(self, resolution_filters, decay_rate=0.):
-        anc2px_position_vectors = self._compute_resolution_filter_to_pixel_position_vectors()
+    def _interpolate_group_convolution_matrix(self, resolution_filters, decay_rate=0.):
+        anc2px_position_vectors = self._compute_origin_filter_to_pixel_position_vectors()
         resolution_filters_propagated = self._propagate_resolution_filters(resolution_filters, anc2px_position_vectors)
         weights = tf.exp(-decay_rate * tf.abs(anc2px_position_vectors))
         weights = weights / tf.reduce_sum(weights, axis=0, keepdims=True)
@@ -278,25 +277,25 @@ class GroupCorrelationLayer(tf.keras.layers.Layer):
 
         return propagated_resolution_filters
     
-    def _compute_resolution_filter_to_pixel_position_vectors(self):
+    def _compute_origin_filter_to_pixel_position_vectors(self):
         if self._num_resolution_filters > 1:
-            resolution_filter_positions = tf.linspace(
+            origin_filter_positions = tf.linspace(
                 start=0.0,
                 stop=tf.cast(self._n_timesteps - 1, tf.float32),
                 num=self._num_resolution_filters,
             )
         else:
-            resolution_filter_positions = tf.convert_to_tensor([0.5 * (self._n_timesteps - 1)])
+            origin_filter_positions = tf.convert_to_tensor([0.5 * (self._n_timesteps - 1)])
 
         pixel_positions = tf.linspace(
             start=0.0,
             stop=tf.cast(self._n_timesteps - 1, tf.float32),
             num=self._n_timesteps,
         )
-        resolution_filter_to_pixel_vectors = (
-            pixel_positions[tf.newaxis, :] - resolution_filter_positions[:, tf.newaxis]
+        origin_filter_to_pixel_vectors = (
+            pixel_positions[tf.newaxis, :] - origin_filter_positions[:, tf.newaxis]
         )
-        return resolution_filter_to_pixel_vectors
+        return origin_filter_to_pixel_vectors
 
     def _increase_step_counter(self):
         incremented_value = self._step_counter + 1
@@ -379,8 +378,8 @@ class GroupCorrelationLayer(tf.keras.layers.Layer):
 
     def _compute_resolution_filters_sigma(self):
         t = tf.cast(self._step_counter, dtype=tf.float32) / self._steps_per_epoch
-        sigma = self._resolution_filter_noise_initial_sigma * tf.exp(
-            -t / self._resolution_filter_noise_sigma_decay_tc_in_epochs
+        sigma = self._resolution_filters_initial_sigma * tf.exp(
+            -t / self._resolution_filters_sigma_decay_tc_in_epochs
         )
         return sigma
 
@@ -402,10 +401,6 @@ class GroupCorrelationLayer(tf.keras.layers.Layer):
     def _retrieve_from_generator_basis(self, m_in_gen_basis, eigvecs):
         m = tf.matmul(m_in_gen_basis, tf.linalg.adjoint(eigvecs))
         return tf.math.real(m)
-
-    def _frobenius_norm(self, x):
-        x2 = tm.abs(x * x)
-        return tf.sqrt(tf.reduce_sum(x2, axis=(0, 1)) + self._eps)
 
     def _form_patches(self, y, scale_idx):
         patch_size = self._get_patch_size(scale_idx)
@@ -508,9 +503,9 @@ class GroupCorrelationLayer(tf.keras.layers.Layer):
         )
         
     @property
-    def _group_correlation_matrix(self):
+    def _group_convolution_matrix(self):
         resolution_filters = self._l2_normalize(self._resolution_filters, axis=1)
-        return self._interpolate_group_correlation_matrix(resolution_filters)
+        return self._interpolate_group_convolution_matrix(resolution_filters)
 
     @property
     def _generator(self):
@@ -523,22 +518,6 @@ class GroupCorrelationLayer(tf.keras.layers.Layer):
         s = self._skew_symmetrize(self._generator_parametrization)
         return s
 
-    @property
-    def group_correlation_matrix(self):
-        return self._group_correlation_matrix
-    
-    @property
-    def generator_padded(self):
-        return self._generator
-    
-    @property
-    def generator_unpadded(self):
-        g = self._generator
-        g = g[self._zero_padding_size:-self._zero_padding_size, 
-              self._zero_padding_size:-self._zero_padding_size]
-        
-        return g
-    
     @property
     def _nbr_mask_size1(self):
         return tf.eye(self._n_timesteps, dtype=tf.float32)
