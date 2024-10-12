@@ -128,8 +128,8 @@ Use the learned symmetries to consistently interpret raw data across different s
 ### Flow learning from many-body systems
 Implement flow-based learning techniques to model and understand the dynamics of many-body or ensemble dynamical systems. The symmetry-aware approach ensures that the model captures essential interactions and behaviors inherent in such complex systems.
 
-## Citation
-If you find this work useful in your research, please consider citing:
+## Citation 
+If you find this work useful in your research, please consider citing
 
 @misc{efe2024symmetrylensnewcandidateparadigm,
       title={SymmetryLens: A new candidate paradigm for unsupervised symmetry learning via locality and equivariance}, 
