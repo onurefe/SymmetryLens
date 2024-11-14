@@ -8,7 +8,7 @@ long_description = (this_directory / "README.md").read_text()
 
 setup(
     name='SymmetryLens',  # Replace with your package name
-    version='0.1.0',      # Initial release version
+    version='0.2.0',      # Initial release version
     author='Onur Efe',
     author_email='onur.efe44@gmail.com',
     description='Python package for learning symmetries and introducing time-axis',

@@ -132,7 +132,7 @@ def run_training_step(
     return model_loss, regularizations
 
 
-def log(epoch, lr_scaled_normalized_training_time, loss, regularizations):
+def log(epoch, step, lr_scaled_normalized_training_time, loss, regularizations):
     loss_term_ids = [
         ri.ALIGNMENT_MAXIMIZATION_REGULARIZATION_ORDER,
         ri.UNIFORMITY_MAXIMIZATION_REGULARIZATION_ORDER,
@@ -155,7 +155,7 @@ def log(epoch, lr_scaled_normalized_training_time, loss, regularizations):
     loss_term_ids = np.array(loss_term_ids)
     sorting_idxs = list(np.argsort(loss_term_ids))
 
-    msg = "Epoch: " + str(epoch) + ", " 
+    msg = "Epoch: " + str(epoch) + " Step: " + str(step) + ", " 
     msg = msg + "Normalized time:{:.2f}".format(lr_scaled_normalized_training_time) + ", "
     msg = msg + "Loss:{:.2f}".format(loss) + ", "
 
@@ -190,6 +190,7 @@ def fit(
     lr_scaled_training_steps = 0.0
 
     for epoch in range(epochs):
+        print("\nStart of epoch %d" % (epoch,))
         np.random.seed(epoch)
         np.random.shuffle(dataset)
 
@@ -217,10 +218,12 @@ def fit(
                 estimator_loss_coeffs,
             )
 
-        log(epoch=epoch, 
-            lr_scaled_normalized_training_time=lr_scaled_normalized_training_time, 
-            loss=loss, 
-            regularizations=regularizations)
+            if step % 20 == 0:
+                log(epoch=epoch, 
+                    step=step, 
+                    lr_scaled_normalized_training_time=lr_scaled_normalized_training_time, 
+                    loss=loss, 
+                    regularizations=regularizations)
 
         for callback in callbacks:
             callback.on_epoch_end(epoch)

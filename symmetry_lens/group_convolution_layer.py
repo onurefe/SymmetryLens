@@ -1,4 +1,5 @@
 import tensorflow as tf
+from tensorflow import math as tm
 from numpy import pi
 from symmetry_lens.regularizations import convert_to_regularization_format
 from symmetry_lens.probability_estimator import ProbabilityEstimator
@@ -9,9 +10,9 @@ class GroupConvolutionLayer(tf.keras.layers.Layer):
     def __init__(
         self,
         num_uniformity_scales = 1,
-        resolution_filters_sigma_decay_tc_in_epochs=10.0,
-        resolution_filters_initial_sigma=0.1,
-        num_resolution_filters=1,
+        origin_filters_sigma_decay_tc_in_epochs=10.0,
+        origin_filters_initial_sigma=0.1,
+        num_origin_filters=1,
         steps_per_epoch=200,
         zero_padding_size=None,
         use_zero_padding=False,
@@ -21,10 +22,10 @@ class GroupConvolutionLayer(tf.keras.layers.Layer):
         **kwargs
     ):
         self._num_uniformity_scales = num_uniformity_scales
-        self._resolution_filters_sigma_decay_tc_in_epochs = resolution_filters_sigma_decay_tc_in_epochs
-        self._resolution_filters_initial_sigma = resolution_filters_initial_sigma
+        self._origin_filters_sigma_decay_tc_in_epochs = origin_filters_sigma_decay_tc_in_epochs
+        self._origin_filters_initial_sigma = origin_filters_initial_sigma
         self._steps_per_epoch = steps_per_epoch
-        self._num_resolution_filters = num_resolution_filters
+        self._num_origin_filters = num_origin_filters
         self._use_zero_padding = use_zero_padding
         self._zero_padding_size = zero_padding_size
         self._eps = eps
@@ -42,7 +43,7 @@ class GroupConvolutionLayer(tf.keras.layers.Layer):
             self._zero_padding_size = self._n_timesteps
             
         self._create_generator_parametrization()
-        self._create_resolution_filters()
+        self._create_origin_filters()
         self._create_probability_estimators()
         self._create_conditional_probability_estimators()
         self._create_step_counter()
@@ -50,9 +51,9 @@ class GroupConvolutionLayer(tf.keras.layers.Layer):
     def call(self, x, lr_scaled_normalized_training_time=None, training=False):
         x = self._demean_and_normalize_input(x)
 
-        # Sample resolution_filters and interpolate lifting map.
-        resolution_filters = self._sample_resolution_filters()
-        lm = self._interpolate_group_convolution_matrix(resolution_filters)
+        # Sample origin_filters and interpolate lifting map.
+        origin_filters = self._sample_origin_filters()
+        lm = self._interpolate_lifting_map(origin_filters)
 
         # Lift x.
         y = self._lift(x, lm)
@@ -65,6 +66,7 @@ class GroupConvolutionLayer(tf.keras.layers.Layer):
         log_p_conditional = self._estimate_conditional_patch_probabilities(y, training=True)
         log_l_conditional = self._estimate_conditional_patch_probabilities(y, given_patch_shift=-1, estimated_patch_shift=-1) 
         log_r_conditional = self._estimate_conditional_patch_probabilities(y, given_patch_shift=1, estimated_patch_shift=1)
+        
         
         self._increase_step_counter()
 
@@ -245,44 +247,44 @@ class GroupConvolutionLayer(tf.keras.layers.Layer):
         y = self._swap_timestep_and_channel_axes(y)
         return y
 
-    def _interpolate_group_convolution_matrix(self, resolution_filters, decay_rate=0.):
+    def _interpolate_lifting_map(self, origin_filters, decay_rate=0.):
         anc2px_position_vectors = self._compute_origin_filter_to_pixel_position_vectors()
-        resolution_filters_propagated = self._propagate_resolution_filters(resolution_filters, anc2px_position_vectors)
+        origin_filters_propagated = self._propagate_origin_filters(origin_filters, anc2px_position_vectors)
         weights = tf.exp(-decay_rate * tf.abs(anc2px_position_vectors))
         weights = weights / tf.reduce_sum(weights, axis=0, keepdims=True)
-        lifting_map = tf.einsum("anl, an->ln", resolution_filters_propagated, weights)
+        lifting_map = tf.einsum("anl, an->ln", origin_filters_propagated, weights)
         return lifting_map
 
-    def _propagate_resolution_filters(self, resolution_filters, anc2px_position_vectors):
+    def _propagate_origin_filters(self, origin_filters, anc2px_position_vectors):
         log_eigvals, eigvecs = self._decompose_generator_parametrization()
         
         if self._use_zero_padding:
             paddings = tf.constant([[0, 0], [self._zero_padding_size, self._zero_padding_size]])
-            resolution_filters = tf.pad(resolution_filters, paddings, "CONSTANT")
+            origin_filters = tf.pad(origin_filters, paddings, "CONSTANT")
         
         powers = anc2px_position_vectors
-        resolution_filters_in_genb = self._map_to_generator_basis(resolution_filters, eigvecs)
+        origin_filters_in_genb = self._map_to_generator_basis(origin_filters, eigvecs)
         impedances = tf.exp(
             tf.einsum(
                 "an, l->anl", self._complex(r=powers), log_eigvals
             )
         )
-        resolution_filters_propagated_in_genb = tf.einsum(
-            "al, anl->anl", resolution_filters_in_genb, impedances
+        origin_filters_propagated_in_genb = tf.einsum(
+            "al, anl->anl", origin_filters_in_genb, impedances
         )
-        propagated_resolution_filters = self._retrieve_from_generator_basis(resolution_filters_propagated_in_genb, eigvecs)
+        propagated_origin_filters = self._retrieve_from_generator_basis(origin_filters_propagated_in_genb, eigvecs)
 
         if self._use_zero_padding:
-            propagated_resolution_filters = propagated_resolution_filters[:, :, self._zero_padding_size:-self._zero_padding_size]
+            propagated_origin_filters = propagated_origin_filters[:, :, self._zero_padding_size:-self._zero_padding_size]
 
-        return propagated_resolution_filters
+        return propagated_origin_filters
     
     def _compute_origin_filter_to_pixel_position_vectors(self):
-        if self._num_resolution_filters > 1:
+        if self._num_origin_filters > 1:
             origin_filter_positions = tf.linspace(
                 start=0.0,
                 stop=tf.cast(self._n_timesteps - 1, tf.float32),
-                num=self._num_resolution_filters,
+                num=self._num_origin_filters,
             )
         else:
             origin_filter_positions = tf.convert_to_tensor([0.5 * (self._n_timesteps - 1)])
@@ -360,26 +362,31 @@ class GroupConvolutionLayer(tf.keras.layers.Layer):
         low_rank_entropy = tf.reduce_sum(h * w) / tf.reduce_sum(w)
 
         return low_rank_entropy
+
+    def _compute_equivalent_variance(self, h, d):
+        d = tf.cast(d, tf.float32)
+        equivalent_variance = tf.sqrt(tf.exp(2. * h / d) / (2. * pi * tf.exp(1.)))
+        return equivalent_variance
     
     def _compute_entropy(self, log_p):
         h = -tf.reduce_mean(log_p, axis=0)
         return h
 
-    def _sample_resolution_filters(self):
-        sigma = self._compute_resolution_filters_sigma()
-        noise = self._generate_resolution_filters_noise()
+    def _sample_origin_filters(self):
+        sigma = self._compute_origin_filters_sigma()
+        noise = self._generate_origin_filters_noise()
 
-        resolution_filters_sampled = self._resolution_filters + sigma * noise
-        resolution_filters_sampled = self._l2_normalize(resolution_filters_sampled, axis=1)
-        return resolution_filters_sampled
+        origin_filters_sampled = self._origin_filters + sigma * noise
+        origin_filters_sampled = self._l2_normalize(origin_filters_sampled, axis=1)
+        return origin_filters_sampled
 
-    def _generate_resolution_filters_noise(self):
-        return tf.random.normal(shape=[self._num_resolution_filters, self._n_timesteps])
+    def _generate_origin_filters_noise(self):
+        return tf.random.normal(shape=[self._num_origin_filters, self._n_timesteps])
 
-    def _compute_resolution_filters_sigma(self):
+    def _compute_origin_filters_sigma(self):
         t = tf.cast(self._step_counter, dtype=tf.float32) / self._steps_per_epoch
-        sigma = self._resolution_filters_initial_sigma * tf.exp(
-            -t / self._resolution_filters_sigma_decay_tc_in_epochs
+        sigma = self._origin_filters_initial_sigma * tf.exp(
+            -t / self._origin_filters_sigma_decay_tc_in_epochs
         )
         return sigma
 
@@ -401,6 +408,10 @@ class GroupConvolutionLayer(tf.keras.layers.Layer):
     def _retrieve_from_generator_basis(self, m_in_gen_basis, eigvecs):
         m = tf.matmul(m_in_gen_basis, tf.linalg.adjoint(eigvecs))
         return tf.math.real(m)
+
+    def _frobenius_norm(self, x):
+        x2 = tm.abs(x * x)
+        return tf.sqrt(tf.reduce_sum(x2, axis=(0, 1)) + self._eps)
 
     def _form_patches(self, y, scale_idx):
         patch_size = self._get_patch_size(scale_idx)
@@ -469,11 +480,11 @@ class GroupConvolutionLayer(tf.keras.layers.Layer):
             pe([y, y])
             self._conditional_probability_estimators.append(pe)
             
-    def _create_resolution_filters(self):
-        self._resolution_filters = tf.Variable(
-            tf.zeros([self._num_resolution_filters, self._n_timesteps]),
+    def _create_origin_filters(self):
+        self._origin_filters = tf.Variable(
+            tf.zeros([self._num_origin_filters, self._n_timesteps]),
             trainable=True,
-            name="resolution_filters",
+            name="origin_filters",
             dtype=tf.float32,
         )
         
@@ -503,9 +514,9 @@ class GroupConvolutionLayer(tf.keras.layers.Layer):
         )
         
     @property
-    def _group_convolution_matrix(self):
-        resolution_filters = self._l2_normalize(self._resolution_filters, axis=1)
-        return self._interpolate_group_convolution_matrix(resolution_filters)
+    def _lifting_map(self):
+        origin_filters = self._l2_normalize(self._origin_filters, axis=1)
+        return self._interpolate_lifting_map(origin_filters)
 
     @property
     def _generator(self):
