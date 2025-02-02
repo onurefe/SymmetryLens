@@ -6,7 +6,7 @@ Our method combines ideas from multiple fields involving group theory, informati
 - Ability to learn symmetries even when they act locally
 - Providing natural coordinates to represent data. Such that under some circumstances, our method shows the true nature of data.
 
-We have tested the method for one and two parameter family of groups. For one parameter family groups, method takes a vector and learns the relevant group. We have experimented with 33 dimensional vectors for one parameter family of groups, which quite significant improvement over the current paradigms. Results are encouraging in terms of stability of learning symmetries which motivates us towards pushing the boundaries of this new symmetry and representation learning paradigm. 
+We have tested the method for one parameter family of groups. We have experimented with 33 dimensional vectors, which are quite significant improvement over the current paradigms. Results are encouraging in terms of stability of learning symmetries which motivates us towards pushing the boundaries of this new symmetry and representation learning paradigm. 
 
 For more details, please refer to our paper:
 
