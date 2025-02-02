@@ -1,8 +1,8 @@
 import numpy as np
 from os.path import join
 import tensorflow as tf
-from symmetry_lens.models import EquivariantAdapter, EquivariantAdapter2d
-from symmetry_lens.synthetic_data_generator import SyntheticDataGenerator, SyntheticDataGenerator2d
+from symmetry_lens.models import EquivariantAdapter
+from symmetry_lens.synthetic_data_generator import SyntheticDataGenerator
 from symmetry_lens.training_loop import fit
 
 
@@ -62,14 +62,13 @@ def make_data_generator(
         {"type": "legendre", "l": 2, "m": 1, "lengths": [6, 8]},
     ],
     waveform_timesteps=32,
-    latent_x_dims = 7,
-    latent_y_dims = 7,
     flatten_output = True,
     noise_normalized_std=0.25,
     use_circulant_translations=False,
     output_representation="natural",
     p_exist = 0.5,
-    num_of_lots = 5
+    num_of_lots = 5,
+    **kwargs
 ):
     if dims == 1:
         dg = SyntheticDataGenerator(
@@ -82,18 +81,8 @@ def make_data_generator(
             p_exist=p_exist,
             num_of_lots=num_of_lots
         )
-    elif dims == 2:
-        dg = SyntheticDataGenerator2d(
-            batch_size=batch_size,
-            latent_x_dims=latent_x_dims,
-            latent_y_dims=latent_y_dims,
-            noise_normalized_std=noise_normalized_std,
-            output_representation=output_representation,
-            flatten_output=flatten_output,
-            features=features,
-            p_exist=p_exist,
-            num_of_lots=num_of_lots
-        )
+    else:
+        raise ValueError("Dimensions must be 1!")
 
     return dg
 
