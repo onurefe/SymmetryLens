@@ -17,7 +17,6 @@ setup(
     url='https://github.com/onurefe/SymmetryLens.git',
     packages=find_packages(),
     install_requires=[
-        'tensorflow==2.14.0',
         'numpy==1.26.0',
         'scipy'
     ],

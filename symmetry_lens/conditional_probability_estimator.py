@@ -40,7 +40,7 @@ class ConditionalProbabilityEstimator(tensorflow.keras.Model):
         self._input_shape = input_shape
 
         if self._hidden_layer_size is None:
-            self._hidden_layer_size = 4 * self._n_estimated_timesteps * self._n_estimated_dims * self._num_kernels
+            self._hidden_layer_size = self._n_estimated_timesteps * self._n_estimated_dims * self._num_kernels
         else: 
             if self._hidden_layer_size % (self._n_estimated_timesteps * self._n_estimated_dims * self._num_kernels) != 0:
                 raise ValueError("Hidden layer size should be multiples of dims multiplied with number of kernels.")

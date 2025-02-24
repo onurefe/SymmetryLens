@@ -1,3 +1,10 @@
+ablation_study
+experiments
+sensitivity_analysis
+operating_region_analysis
+baseline
+*.h5
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

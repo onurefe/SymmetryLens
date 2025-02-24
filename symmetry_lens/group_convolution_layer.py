@@ -16,6 +16,7 @@ class GroupConvolutionLayer(tf.keras.layers.Layer):
         steps_per_epoch=200,
         zero_padding_size=None,
         use_zero_padding=False,
+        conditional_probability_estimator_hidden_layer_size = None,
         name="group_convolution_layer",
         eps=1e-7,
         *args,
@@ -24,6 +25,7 @@ class GroupConvolutionLayer(tf.keras.layers.Layer):
         self._num_uniformity_scales = num_uniformity_scales
         self._origin_filters_sigma_decay_tc_in_epochs = origin_filters_sigma_decay_tc_in_epochs
         self._origin_filters_initial_sigma = origin_filters_initial_sigma
+        self._conditional_probability_estimator_hidden_layer_size = conditional_probability_estimator_hidden_layer_size
         self._steps_per_epoch = steps_per_epoch
         self._num_origin_filters = num_origin_filters
         self._use_zero_padding = use_zero_padding
@@ -67,15 +69,11 @@ class GroupConvolutionLayer(tf.keras.layers.Layer):
         log_l_conditional = self._estimate_conditional_patch_probabilities(y, given_patch_shift=-1, estimated_patch_shift=-1) 
         log_r_conditional = self._estimate_conditional_patch_probabilities(y, given_patch_shift=1, estimated_patch_shift=1)
         
-        
         self._increase_step_counter()
 
         if training:
             self.add_loss(self._compute_alignment_maximization_regularization(y))
-            self.add_loss(self._compute_uniformity_maximization_regularization(log_p=log_p, 
-                                                                               log_l=log_l, 
-                                                                               log_r=log_r, 
-                                                                               log_p_conditional=log_p_conditional, 
+            self.add_loss(self._compute_uniformity_maximization_regularization(log_p_conditional=log_p_conditional, 
                                                                                log_l_conditional=log_l_conditional, 
                                                                                log_r_conditional=log_r_conditional))
             self.add_loss(self._compute_marginal_entropy_minimization_regularization(log_p))
@@ -91,16 +89,12 @@ class GroupConvolutionLayer(tf.keras.layers.Layer):
 
         return convert_to_regularization_format("alignment_maximization", reg)
 
-    def _compute_uniformity_maximization_regularization(self, log_p, log_l, log_r, log_p_conditional, log_l_conditional, log_r_conditional):
-        reg1 = self._compute_mean_kl_divergence_between_neighbor_patches(log_p, 
-                                                                         log_l, 
-                                                                         log_r)
+    def _compute_uniformity_maximization_regularization(self, log_p_conditional, log_l_conditional, log_r_conditional):
+        reg = self._compute_mean_conditional_kl_divergence_between_patch_pairs(log_p_conditional, 
+                                                                               log_l_conditional, 
+                                                                               log_r_conditional)
         
-        reg2 = self._compute_mean_conditional_kl_divergence_between_patch_pairs(log_p_conditional, 
-                                                                                log_l_conditional, 
-                                                                                log_r_conditional)
-        
-        return convert_to_regularization_format("uniformity_maximization", (reg1 + reg2))
+        return convert_to_regularization_format("uniformity_maximization", reg)
 
     
     def _compute_marginal_entropy_minimization_regularization(self, log_p):
@@ -235,6 +229,7 @@ class GroupConvolutionLayer(tf.keras.layers.Layer):
     
     def _get_kl_divergence_mask(self, scale_idx, patch_shift=0):
         num_patches = self._get_num_patches(scale_idx)
+        
         patch_indexes = tf.range(0, num_patches)
         shifted_patch_indexes = patch_indexes + patch_shift
         mask = tf.where(((0 <= shifted_patch_indexes) & (shifted_patch_indexes < num_patches)), 1.0, 0.0)
@@ -358,7 +353,7 @@ class GroupConvolutionLayer(tf.keras.layers.Layer):
         cov = self._cross_covariance(z)
         var = tf.linalg.svd(cov, compute_uv=False)
         h = self._gaussian_entropy_1d(var)
-        w = self._soft_thresholding_window(normalized_rank, gain=100, exp_clamp=50)
+        w = self._soft_thresholding_window(normalized_rank)
         low_rank_entropy = tf.reduce_sum(h * w) / tf.reduce_sum(w)
 
         return low_rank_entropy
@@ -390,7 +385,7 @@ class GroupConvolutionLayer(tf.keras.layers.Layer):
         )
         return sigma
 
-    def _soft_thresholding_window(self, threshold, gain=100, exp_clamp=50):
+    def _soft_thresholding_window(self, threshold, gain=50, exp_clamp=50):
         s = tf.linspace(0.0, 1.0, self._n_timesteps)
         exponent = gain * (s - threshold)
         exponent = tf.clip_by_value(
@@ -473,6 +468,7 @@ class GroupConvolutionLayer(tf.keras.layers.Layer):
         for scale_idx in range(0, self._num_uniformity_scales):
             patch_size = self._get_patch_size(scale_idx)
             pe = ConditionalProbabilityEstimator(num_kernels=4, 
+                                                 hidden_layer_size=self._conditional_probability_estimator_hidden_layer_size,
                                                  name="conditional_probability_estimator_{}".format(scale_idx))
             
             num_patches = self._get_num_patches(scale_idx)
@@ -538,7 +534,7 @@ class GroupConvolutionLayer(tf.keras.layers.Layer):
         positions = tf.range(0, self._n_timesteps, dtype=tf.float32)
         distances = tf.abs(positions[:, tf.newaxis] - positions[tf.newaxis, :])
         mask = tf.where(distances <= 1, 1.0, 0.0)
-
+        
         return mask
     
     @property
