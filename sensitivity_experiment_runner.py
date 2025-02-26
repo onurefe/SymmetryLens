@@ -15,8 +15,8 @@ from SALib.analyze import morris as morris_analyze
 
 NUM_PROCESS_PER_GPUS = [9, 9, 9, 9]
 
-NUM_TRAINING_EPOCHS = 2500
-BATCH_SIZE = 630
+NUM_TRAINING_EPOCHS = 4000
+BATCH_SIZE = 2520
 OUTPUT_REPRESENTATION = "natural"
 SYNTHETIC_DATASET_FEATURES = [
     {
@@ -27,10 +27,9 @@ SYNTHETIC_DATASET_FEATURES = [
         "amplitude_max": 1.5
     }
 ]
-NOISE_STD = 0.05
 WAVEFORM_TIMESTEPS = 7
 USE_ZERO_PADDING = True
-USE_CIRCULANT_TRANSLATIONS = False
+USE_CIRCULANT_TRANSLATIONS = True
 BASE_FOLDER = "sensitivity_analysis"
 
 def get_exp_dir(exp_name):
@@ -148,14 +147,14 @@ def distribute_experiments(experiments):
 
     return tasks
 
-def form_operating_region_experiments(estimator_lr_bounds = [1.25e-3, 5e-3],
-                                      model_lr_bounds = [0.5e-4, 2e-4],
-                                      lr_decay_bounds = [0.05, 0.2],
-                                      alignment_bounds = [0.5, 1.5],
-                                      uniformity_bounds = [0.5, 1.5],
-                                      resolution_bounds = [0.5, 1.5],
-                                      infomax_bounds = [0.5, 1.5],
-                                      noise_bounds = [0.0, 0.25],
+def form_operating_region_experiments(estimator_lr_bounds = [1.875e-3, 3.125e-3],
+                                      model_lr_bounds = [0.75e-4, 1.25e-4],
+                                      lr_decay_bounds = [0.1, 0.2],
+                                      alignment_bounds = [0.75, 1.25],
+                                      uniformity_bounds = [0.75, 1.25],
+                                      resolution_bounds = [0.75, 1.25],
+                                      infomax_bounds = [0.75, 1.25],
+                                      noise_bounds = [0.0, 0.1],
                                       num_grid_levels = 4,
                                       num_trajectories = 4,
                                       eps = 1e-7):
@@ -233,11 +232,11 @@ def form_operating_region_experiments(estimator_lr_bounds = [1.25e-3, 5e-3],
     
     return experiments
         
-# For experiments dictionary.
-experiments = form_operating_region_experiments()   
-    
 if __name__ == "__main__":
-     
+    # For experiments dictionary.
+    experiments = form_operating_region_experiments()  
+    print("Number of experiments:{len(experiments)}")
+    
     # Number of GPUs available
     gpus = tf.config.experimental.list_physical_devices("GPU")
     num_gpus = len(gpus)

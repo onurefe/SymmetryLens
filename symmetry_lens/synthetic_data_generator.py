@@ -85,7 +85,6 @@ class SyntheticDataGenerator:
             x_feature = np.sum(x_feature * (logits[:, :, np.newaxis]), axis=1)
             x = x + x_feature
         
-        x = self._demean(x, axis=(0 ,1))
         x = self._std_normalize(x, axis=(0, 1))                
         x = self._add_noise(x)
 
