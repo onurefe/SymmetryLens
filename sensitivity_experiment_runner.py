@@ -151,7 +151,7 @@ def form_operating_region_experiments(estimator_lr_bounds = [1.875e-3, 3.125e-3]
                                       model_lr_bounds = [0.75e-4, 1.25e-4],
                                       lr_decay_bounds = [0.1, 0.2],
                                       alignment_bounds = [0.75, 1.25],
-                                      uniformity_bounds = [0.75, 1.25],
+                                      uniformity_bounds = [1.5, 2.5],
                                       resolution_bounds = [0.75, 1.25],
                                       infomax_bounds = [0.75, 1.25],
                                       noise_bounds = [0.0, 0.1],
@@ -219,7 +219,8 @@ def form_operating_region_experiments(estimator_lr_bounds = [1.875e-3, 3.125e-3]
             "joint_entropy_maximization_reg_coeff": (resolution + infomax)
         }
         exp_specs["estimator_loss_coeffs"] = {
-            
+            "probability_estimator_entropy_minimization_reg_coeff": 1.0,
+            "conditional_probability_estimator_entropy_minimization_reg_coeff": 1.0
         }
         exp_specs["num_training_batches"] = 100
         exp_specs["training_duration_in_epochs"] = NUM_TRAINING_EPOCHS

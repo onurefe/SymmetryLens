@@ -73,7 +73,10 @@ class GroupConvolutionLayer(tf.keras.layers.Layer):
 
         if training:
             self.add_loss(self._compute_alignment_maximization_regularization(y))
-            self.add_loss(self._compute_uniformity_maximization_regularization(log_p_conditional=log_p_conditional, 
+            self.add_loss(self._compute_uniformity_maximization_regularization(log_p=log_p,
+                                                                               log_l=log_l,
+                                                                               log_r=log_r,
+                                                                               log_p_conditional=log_p_conditional, 
                                                                                log_l_conditional=log_l_conditional, 
                                                                                log_r_conditional=log_r_conditional))
             self.add_loss(self._compute_marginal_entropy_minimization_regularization(log_p))
@@ -89,11 +92,14 @@ class GroupConvolutionLayer(tf.keras.layers.Layer):
 
         return convert_to_regularization_format("alignment_maximization", reg)
 
-    def _compute_uniformity_maximization_regularization(self, log_p_conditional, log_l_conditional, log_r_conditional):
-        reg = self._compute_mean_conditional_kl_divergence_between_patch_pairs(log_p_conditional, 
-                                                                               log_l_conditional, 
-                                                                               log_r_conditional)
+    def _compute_uniformity_maximization_regularization(self, log_p, log_l, log_r, log_p_conditional, log_l_conditional, log_r_conditional):
+        reg1 = self._compute_mean_kl_divergence_between_neighbor_patches(log_p, log_l, log_r)
         
+        reg2 = self._compute_mean_conditional_kl_divergence_between_patch_pairs(log_p_conditional, 
+                                                                                log_l_conditional, 
+                                                                                log_r_conditional)
+        
+        reg = 0.5 * (reg1 + reg2)
         return convert_to_regularization_format("uniformity_maximization", reg)
 
     
