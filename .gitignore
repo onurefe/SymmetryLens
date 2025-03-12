@@ -3,6 +3,9 @@ experiments
 sensitivity_analysis
 operating_region_analysis
 *.h5
+sensitivity_analysis
+sensitivity_analysis_circulant
+sensitivity_analysis_noncirculant
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

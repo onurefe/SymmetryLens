@@ -1,7 +1,7 @@
-EXPERIMENTS_FOLDER = "/home/onur/Code/SymmetryLens/experiments"
+EXPERIMENTS_FOLDER = "/home/onur/Code/SymmetryLens/sensitivity_analysis"
 
-EXP_NAME = "model_weights_mnist"
-EPOCH = 9999
+EXP_NAME = "exp4"
+EPOCH = 3999
 import numpy as np
 import sys
 import os
@@ -50,6 +50,23 @@ sns.set_theme(
         'ytick.color': 'black',        # Color for y-axis tick labels
     }
 )
+
+def read_json(file_path):
+    try:
+        with open(file_path, 'r') as file:
+            data = json.load(file)
+            return data
+    except FileNotFoundError:
+        print(f"File not found: {file_path}")
+        return None
+    except json.JSONDecodeError:
+        print(f"Error decoding JSON from the file: {file_path}")
+        return None
+    
+def _load_experiment_specs():
+    specs_path = join(EXPERIMENTS_FOLDER, EXP_NAME, "specs.json")
+    return read_json(specs_path)
+    
 
 def _get_model_dir(epoch=EPOCH):
     return join(EXPERIMENTS_FOLDER, EXP_NAME, "epochs", "ep{}.h5".format(epoch))
@@ -216,32 +233,27 @@ def _find_ideal_group_convolution_matrix(learned_group_convolution_matrix):
             return identity
         else:
             return -identity
-    
 
-NUM_TRAINING_EPOCHS = 10000
-BATCH_SIZE = 10800
-OUTPUT_REPRESENTATION = "natural"
-SYNTHETIC_DATASET_FEATURES = [
-    {
-        "type": "mnist_slices"
-    }
-]
-NOISE_STD = 0.05
-WAVEFORM_TIMESTEPS = 27
-USE_ZERO_PADDING = True
+specs = _load_experiment_specs()
+
+use_zero_padding = specs["model_params"]["use_zero_padding"]
+batch_size = specs["data_generator_params"]["batch_size"]
+waveform_timesteps = specs["data_generator_params"]["waveform_timesteps"]
 
 # Create model and load weights.
-x_init = np.random.normal(size=(BATCH_SIZE, WAVEFORM_TIMESTEPS, 1))
-model = create_model(zero_padding_size=WAVEFORM_TIMESTEPS,
-                     use_zero_padding=USE_ZERO_PADDING,
-                     conditional_probability_estimator_hidden_layer_size = WAVEFORM_TIMESTEPS*16,
+x_init = np.random.normal(size=(batch_size, waveform_timesteps, 1))
+model = create_model(zero_padding_size=waveform_timesteps,
+                     use_zero_padding=use_zero_padding,
+                     conditional_probability_estimator_hidden_layer_size = waveform_timesteps*16,
                      num_uniformity_scales=1)
 model.compile()
 model(x_init)
 
 learned_generator = _parse_learned_generator()
-if USE_ZERO_PADDING:
-    learned_generator = learned_generator[WAVEFORM_TIMESTEPS:-WAVEFORM_TIMESTEPS, WAVEFORM_TIMESTEPS:-WAVEFORM_TIMESTEPS]
+
+if use_zero_padding:
+    learned_generator = learned_generator[waveform_timesteps:-waveform_timesteps, 
+                                          waveform_timesteps:-waveform_timesteps]
 
 group_convolution_matrix = _parse_group_convolution_matrix()
     
