@@ -51,6 +51,23 @@ sns.set_theme(
     }
 )
 
+def read_json(file_path):
+    try:
+        with open(file_path, 'r') as file:
+            data = json.load(file)
+            return data
+    except FileNotFoundError:
+        print(f"File not found: {file_path}")
+        return None
+    except json.JSONDecodeError:
+        print(f"Error decoding JSON from the file: {file_path}")
+        return None
+    
+def _load_experiment_specs():
+    specs_path = join(EXPERIMENTS_FOLDER, EXP_NAME, "specs.json")
+    return read_json(specs_path)
+    
+
 def _get_model_dir(epoch=EPOCH):
     return join(EXPERIMENTS_FOLDER, EXP_NAME, "epochs", "ep{}.h5".format(epoch))
 
@@ -233,9 +250,13 @@ def _find_ideal_group_convolution_matrix(learned_group_convolution_matrix):
             return identity
         else:
             return -identity
-    
 
 specs = _load_experiment_specs()
+
+use_zero_padding = specs["model_params"]["use_zero_padding"]
+batch_size = specs["data_generator_params"]["batch_size"]
+waveform_timesteps = specs["data_generator_params"]["waveform_timesteps"]
+
 # Create model and load weights.
 x_init = np.random.normal(size=(specs["data_generator_params"]["batch_size"], 
                                 specs["data_generator_params"]["waveform_timesteps"], 
@@ -244,6 +265,10 @@ x_init = np.random.normal(size=(specs["data_generator_params"]["batch_size"],
 model = create_model(zero_padding_size=specs["data_generator_params"]["waveform_timesteps"],
                      use_zero_padding=specs["model_params"]["use_zero_padding"],
                      conditional_probability_estimator_hidden_layer_size=specs["model_params"]["conditional_probability_estimator_hidden_layer_size"],
+x_init = np.random.normal(size=(batch_size, waveform_timesteps, 1))
+model = create_model(zero_padding_size=waveform_timesteps,
+                     use_zero_padding=use_zero_padding,
+                     conditional_probability_estimator_hidden_layer_size = waveform_timesteps*16,
                      num_uniformity_scales=1)
 model.compile()
 model(x_init)
@@ -252,6 +277,10 @@ learned_generator = _parse_learned_generator()
 if specs["model_params"]["use_zero_padding"]:
     learned_generator = learned_generator[specs["data_generator_params"]["waveform_timesteps"]:-specs["data_generator_params"]["waveform_timesteps"], 
                                           specs["data_generator_params"]["waveform_timesteps"]:-specs["data_generator_params"]["waveform_timesteps"]]
+
+if use_zero_padding:
+    learned_generator = learned_generator[waveform_timesteps:-waveform_timesteps, 
+                                          waveform_timesteps:-waveform_timesteps]
 
 group_convolution_matrix = _parse_group_convolution_matrix()
     

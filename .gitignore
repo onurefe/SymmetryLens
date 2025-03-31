@@ -5,6 +5,9 @@ operating_region_analysis
 baseline-recover
 baseline/exp*
 *.h5
+sensitivity_analysis
+sensitivity_analysis_circulant
+sensitivity_analysis_noncirculant
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
