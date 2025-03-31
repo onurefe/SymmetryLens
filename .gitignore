@@ -1,7 +1,9 @@
-ablation_study
+ablation_study*/*
 experiments
 sensitivity_analysis
 operating_region_analysis
+baseline-recover
+baseline/exp*
 *.h5
 
 # Byte-compiled / optimized / DLL files

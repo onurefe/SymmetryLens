@@ -10,20 +10,20 @@ from os import makedirs
 from os.path import join, exists
 from shutil import rmtree
 
-NUM_PROCESS_PER_GPUS = [8, 8, 8, 8]
+NUM_PROCESS_PER_GPUS = [1, 1, 1, 1]
 
-NUM_TRAINING_EPOCHS = 2500
-BATCH_SIZE = 630
+NUM_TRAINING_EPOCHS = 10000
+BATCH_SIZE = 10800
 OUTPUT_REPRESENTATION = "natural"
 SYNTHETIC_DATASET_FEATURES = [
     {
         "type": "mnist_slices"
     }
 ]
-NOISE_STD = 0.05
-WAVEFORM_TIMESTEPS = 7
+NOISE_STD = 0.0
+WAVEFORM_TIMESTEPS = 27
 USE_ZERO_PADDING = True
-CONDITIONAL_PROBABILITY_ESTIMATOR_HIDDEN_LAYER_SIZE = 112
+CONDITIONAL_PROBABILITY_ESTIMATOR_HIDDEN_LAYER_SIZE = WAVEFORM_TIMESTEPS*16
 USE_CIRCULANT_TRANSLATIONS = False
 BASE_FOLDER = "operating_region_analysis"
 
@@ -146,13 +146,13 @@ def form_operating_region_experiments(default_estimator_lr = 2.5e-3,
                                       default_model_lr = 1e-4,
                                       default_lr_decay = 0.1,
                                       default_alignment = 1.0,
-                                      default_uniformity = 1.0,
+                                      default_uniformity = 2.0,
                                       default_resolution = 1.0,
                                       default_infomax = 1.0,
-                                      default_noise = 0.05,
-                                      min_multiplier = 0.1,
-                                      max_multipler = 10.,
-                                      num_vals = 5,
+                                      default_noise = 0.0,
+                                      min_multiplier = 1.,
+                                      max_multipler = 1.,
+                                      num_vals = 1,
                                       eps = 1e-7):
 
     multipliers = np.logspace(np.log10(min_multiplier), 
@@ -202,7 +202,8 @@ def form_operating_region_experiments(default_estimator_lr = 2.5e-3,
                 "joint_entropy_maximization_reg_coeff": (hyperparams["resolution"] + hyperparams["infomax"])
             }
             exp_specs["estimator_loss_coeffs"] = {
-                
+                "probability_estimator_entropy_minimization_reg_coeff": 1.0,
+                "conditional_probability_estimator_entropy_minimization_reg_coeff": 1.0
             }
             exp_specs["num_training_batches"] = 100
             exp_specs["training_duration_in_epochs"] = NUM_TRAINING_EPOCHS

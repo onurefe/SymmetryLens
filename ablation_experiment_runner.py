@@ -9,23 +9,39 @@ from symmetry_lens import *
 from os import makedirs
 from os.path import join, exists
 from shutil import rmtree
+from copy import deepcopy
 
-NUM_PROCESS_PER_GPUS = [1, 1, 1, 1]
+NUM_PROCESS_PER_GPUS = [0, 3, 3, 0]
 
-NUM_TRAINING_EPOCHS = 10000
-BATCH_SIZE = 10800
+NUM_TRAINING_EPOCHS = 8000
+BATCH_SIZE = 2500
 OUTPUT_REPRESENTATION = "natural"
 SYNTHETIC_DATASET_FEATURES = [
     {
-        "type": "mnist_slices"
+        "type": "legendre",
+        "scale_min": 6,
+        "scale_max": 15,
+        "amplitude_min": 0.5,
+        "amplitude_max": 1.5,
+        "l":2,
+        "m":1
+    },
+    {
+        "type": "legendre",
+        "scale_min": 6,
+        "scale_max": 15,
+        "amplitude_min": 0.5,
+        "amplitude_max": 1.5,
+        "l":3,
+        "m":1
     }
 ]
 NOISE_STD = 0.05
-WAVEFORM_TIMESTEPS = 27
-USE_ZERO_PADDING = True
-CONDITIONAL_PROBABILITY_ESTIMATOR_HIDDEN_LAYER_SIZE = 432
-USE_CIRCULANT_TRANSLATIONS = False
-BASE_FOLDER = "ablation_study"
+WAVEFORM_TIMESTEPS = 25
+USE_ZERO_PADDING = False
+CONDITIONAL_PROBABILITY_ESTIMATOR_HIDDEN_LAYER_SIZE = WAVEFORM_TIMESTEPS*4*2
+USE_CIRCULANT_TRANSLATIONS = True
+BASE_FOLDER = "ablation_study3"
 
 def get_exp_dir(exp_name):
     model_dir = join(BASE_FOLDER, exp_name)
@@ -148,24 +164,25 @@ def form_ablation_experiments(estimator_lr = 2.5e-3,
                               alignment = 1.,
                               uniformity = 2.,
                               resolution = 1.,
-                              infomax = 1.):
+                              infomax = 0.75):
 
-    default_hyperparams = {"estimator_lr":estimator_lr, 
-                           "model_lr":model_lr, 
-                           "lr_decay":lr_decay, 
-                           "alignment":alignment, 
-                           "uniformity":uniformity, 
-                           "resolution":resolution, 
-                           "infomax":infomax}
+    default_hyperparams = {"estimator_lr": estimator_lr, 
+                           "model_lr": model_lr, 
+                           "lr_decay": lr_decay, 
+                           "alignment": alignment, 
+                           "uniformity": uniformity, 
+                           "resolution": resolution, 
+                           "infomax": infomax}
 
     # For experiment files.    
     experiments = {}
-    for key in ["alignment", "uniformity", "resolution", "infomax"]:
+    for key_combinations in [[], ["alignment"], ["uniformity"], ["resolution"], ["infomax"], ["alignment", "uniformity"]]:
         # Set default parameter values.
-        hyperparams = default_hyperparams
-        hyperparams[key] = 0.
+        hyperparams = deepcopy(default_hyperparams)
+        for key in key_combinations:
+            hyperparams[key] = 0.
 
-        exp_name = f"ablated:{key}"
+        exp_name = f"ablated:{key_combinations}"
         exp_specs = {}
         exp_specs["model_params"] = {
             "zero_padding_size":WAVEFORM_TIMESTEPS,
@@ -188,7 +205,8 @@ def form_ablation_experiments(estimator_lr = 2.5e-3,
             "joint_entropy_maximization_reg_coeff": (hyperparams["resolution"] + hyperparams["infomax"])
         }
         exp_specs["estimator_loss_coeffs"] = {
-            
+            "probability_estimator_entropy_minimization_reg_coeff": 1.0,
+            "conditional_probability_estimator_entropy_minimization_reg_coeff": 1.0
         }
         exp_specs["num_training_batches"] = 100
         exp_specs["training_duration_in_epochs"] = NUM_TRAINING_EPOCHS

@@ -10,6 +10,7 @@ from os import makedirs
 from os.path import join, exists
 from shutil import rmtree
 import numpy as np
+import argparse
 from SALib.sample import morris as morris_sample
 from SALib.analyze import morris as morris_analyze
 
@@ -233,7 +234,41 @@ def form_operating_region_experiments(estimator_lr_bounds = [1.875e-3, 3.125e-3]
     
     return experiments
         
+NUM_TRAINING_EPOCHS = 4000
+BATCH_SIZE = 2520
+OUTPUT_REPRESENTATION = "natural"
+SYNTHETIC_DATASET_FEATURES = [
+    {
+        "type": "gaussian",
+        "scale_min": 0.2,
+        "scale_max": 1.0,
+        "amplitude_min": 0.5,
+        "amplitude_max": 1.5
+    }
+]
+WAVEFORM_TIMESTEPS = 7
+USE_ZERO_PADDING = True
+USE_CIRCULANT_TRANSLATIONS = True
+BASE_FOLDER = "sensitivity_analysis"
+
 if __name__ == "__main__":
+     # Create the parser
+    parser = argparse.ArgumentParser(
+        description="Run a sensitivity experiment using morris method or analyze previously conducted experiments."
+    )
+
+    # Add arguments
+    parser.add_argument("operation", type=str, default='e', help="Operation type. Type 'e' for experiment, 'a' for analysis.")
+    parser.add_argument("num_training_epochs", type=int, default=NUM_TRAINING_EPOCHS, help="Number of training epochs for each experiment.")
+    parser.add_argument("batch_size", type=int, default=BATCH_SIZE, help="Batch size")
+    parser.add_argument("output_representation", type=str, default=OUTPUT_REPRESENTATION, help="Output representation type.")
+    parser.add_argument("waveform_timesteps", type=int, default=WAVEFORM_TIMESTEPS, help="Number of timesteps.")
+    parser.add_argument("use_circulant_translations", type=bool, default=USE_CIRCULANT_TRANSLATIONS, help="Use circulant data generation if true.")
+    parser.add_argument("base_folder", type=str, default=BASE_FOLDER, help="Folder in which the experiments will be stored to.")
+    
+    # Parse the arguments
+    args = parser.parse_args()
+    
     # For experiments dictionary.
     experiments = form_operating_region_experiments()  
     print("Number of experiments:{len(experiments)}")

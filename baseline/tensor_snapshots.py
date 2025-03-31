@@ -1,7 +1,7 @@
-EXPERIMENTS_FOLDER = "/home/oefe/Code/SymmetryLens/ablation_study3"
+EXPERIMENTS_FOLDER = "/home/oefe/Code/SymmetryLens/baseline"
 
-EXP_NAME = "ablated:[]"
-EPOCH = 2900
+EXP_NAME = "exp_9dims_sgan"
+EPOCH = 80
 import numpy as np
 import sys
 import os
@@ -25,6 +25,7 @@ from matplotlib.ticker import FormatStrFormatter
 from matplotlib.ticker import StrMethodFormatter
 import json
 from matplotlib.ticker import MaxNLocator, MultipleLocator
+from symmetry_gan import define_generator, define_discriminator, define_gan
 
 TRANSLATION_DIRECTION_LEFT_TO_RIGHT = 0
 TRANSLATION_DIRECTION_RIGHT_TO_LEFT = 1
@@ -57,33 +58,19 @@ def _get_model_dir(epoch=EPOCH):
 def _get_snapshot_dir(epoch=EPOCH):
     return join(EXPERIMENTS_FOLDER, EXP_NAME, "tensor_snapshots", "ep{}".format(epoch))
 
-def read_json(file_path):
-    try:
-        with open(file_path, 'r') as file:
-            data = json.load(file)
-            return data
-    except FileNotFoundError:
-        print(f"File not found: {file_path}")
-        return None
-    except json.JSONDecodeError:
-        print(f"Error decoding JSON from the file: {file_path}")
-        return None
-    
-def _load_experiment_specs():
-    specs_path = join(EXPERIMENTS_FOLDER, EXP_NAME, "specs.json")
-    return read_json(specs_path)
-
 def _make_output_dirs(epoch=EPOCH):
     if exists(_get_snapshot_dir(epoch=epoch)):
         shutil.rmtree(_get_snapshot_dir(epoch=epoch))
 
     makedirs(_get_snapshot_dir(epoch=epoch), exist_ok=True)
 
-def _plot_matrix_comparison(ideal_matrix, learned_matrix, save_path):
+def _plot_generator_matrix_comparison(ideal_matrix, learned_matrix, save_path):
     n_timesteps = np.shape(ideal_matrix)[0]
         
     component_labels = np.arange(start=0, stop=n_timesteps)
-    interval = 1 + n_timesteps // 4
+    interval = 1 + n_timesteps // 9
+    
+    component_labels = np.arange(start=0, stop=n_timesteps)
     xtick_labels = np.where(component_labels % interval == 0, component_labels.astype(str), "")
     ytick_labels = np.where(component_labels % interval == 0, component_labels.astype(str), "")
     
@@ -137,18 +124,18 @@ def _plot_matrix_comparison(ideal_matrix, learned_matrix, save_path):
     axes[0, 1].set_ylabel("")
     
     # ---- Error matrix ----
-    # Because your error_matrix is already constrained to [-0.5, 0.5], specify those ticks:
+    # Because your error_matrix is already constrained to [-0.15, 0.15], specify those ticks:
     sns.heatmap(
         error_matrix,
         ax=axes[1, 0],
         cmap=sns.color_palette("RdBu_r", as_cmap=True),
-        vmin=-1.01,
-        vmax=1.01,
+        vmin=-1.,
+        vmax=1.,
         xticklabels=xtick_labels,
         yticklabels=ytick_labels,
         cbar=True,
         cbar_kws={
-            "ticks": np.linspace(-1.0, 1.0, 7),
+            "ticks": np.linspace(-1., 1., 7),
             "format": StrMethodFormatter("{x:+.2f}")
         }
     )
@@ -161,10 +148,9 @@ def _plot_matrix_comparison(ideal_matrix, learned_matrix, save_path):
         error_values, 
         ax=axes[1, 1],
         kde=False,
-        binwidth=0.05,
         color=sns.color_palette("Blues")[4]
     )
-    axes[1, 1].set_xlim(-1.0, 1.0)
+    axes[1, 1].set_xlim(-1., 1.)
     axes[1, 1].set_title("Error Histogram", pad=12)
     axes[1, 1].set_xlabel("")
     axes[1, 1].set_ylabel("")
@@ -179,97 +165,51 @@ def _plot_matrix_comparison(ideal_matrix, learned_matrix, save_path):
 def _matrix_cosine_similarity(A, B):
     return np.sum(A * B, axis=(0,1)) / (np.linalg.norm(A) * np.linalg.norm(B))
 
-def _parse_learned_generator(epoch=EPOCH):
-    model.load_weights(_get_model_dir(epoch=epoch))
-    learned_generator = model._group_convolution_layer._generator
+def _parse_learned_generator(epoch):
+    gan.load_weights(_get_model_dir(epoch=epoch))
+    learned_generator = generator.layers[1].compute_generator()
     learned_generator = learned_generator.numpy()
     return learned_generator
 
-def _parse_group_convolution_matrix(epoch=EPOCH):
-    lm = model._group_convolution_layer._lifting_map
-    lm = lm.numpy()
-    return lm
-
-def _find_ideal_circulant_translation_generator(learned_generator, circulant=False):
+def _find_ideal_circulant_translation_generator(learned_generator):
     n = np.shape(learned_generator)[0]
     
-    row_idxs = np.arange(0, n)[np.newaxis, :]
-    col_idxs = np.arange(0, n)[:, np.newaxis]
+    max_score = -1.
+    ideal_generator = None
     
-    if circulant: 
-        left_shift = np.where(((row_idxs+1) - col_idxs) % n == 0, 1, 0)
-        right_shift = np.where((row_idxs - (col_idxs +1)) % n == 0, 1, 0)
-    else:
-        left_shift = np.where(row_idxs+1 == col_idxs, 1, 0)
-        right_shift = np.where(row_idxs == col_idxs +1, 1, 0)
-    
-    sl = _matrix_cosine_similarity(left_shift, learned_generator)
-    sr = _matrix_cosine_similarity(right_shift, learned_generator)
-    
-    if sl > sr:
-        return left_shift
-    else:
-        return right_shift
+    for s in range(0, n):
+        candidate_ideal_generator = np.roll(np.eye(n), axis=1, shift=s)
+        score = _matrix_cosine_similarity(learned_generator, candidate_ideal_generator)
+        if score > max_score:
+            ideal_generator = candidate_ideal_generator
+            max_score = score            
+        
+    return ideal_generator
 
-def _find_ideal_group_convolution_matrix(learned_group_convolution_matrix):
-    n = np.shape(learned_generator)[0]
+generator = define_generator()
+discriminator = define_discriminator()
+gan = define_gan(generator=generator, discriminator=discriminator)
+
+max_cosine_similarity = -1.
+best_epoch = None
+
+for epoch in range(0, 100):
+    learned_generator = _parse_learned_generator(epoch)
+    ideal_generator = _find_ideal_circulant_translation_generator(learned_generator)
+    cosine_similarity = _matrix_cosine_similarity(learned_generator, ideal_generator)
     
-    row_idxs = np.arange(0, n)[np.newaxis, :]
-    col_idxs = np.arange(0, n)[:, np.newaxis]
-    
-    reverting = np.where(row_idxs == col_idxs, 1, 0)
-    identity = np.where(row_idxs + col_idxs == n, 1, 0)
+    if cosine_similarity > max_cosine_similarity:
+        max_cosine_similarity = cosine_similarity
+        best_epoch = epoch
 
-    sr = _matrix_cosine_similarity(reverting, learned_group_convolution_matrix)
-    si = _matrix_cosine_similarity(identity, learned_group_convolution_matrix)
-    
-    if np.abs(sr) > np.abs(si):
-        if sr > 0.:
-            return reverting
-        else:
-            return -reverting
-    else:
-        if si > 0.:
-            return identity
-        else:
-            return -identity
-    
-
-specs = _load_experiment_specs()
-# Create model and load weights.
-x_init = np.random.normal(size=(specs["data_generator_params"]["batch_size"], 
-                                specs["data_generator_params"]["waveform_timesteps"], 
-                                1))
-
-model = create_model(zero_padding_size=specs["data_generator_params"]["waveform_timesteps"],
-                     use_zero_padding=specs["model_params"]["use_zero_padding"],
-                     conditional_probability_estimator_hidden_layer_size=specs["model_params"]["conditional_probability_estimator_hidden_layer_size"],
-                     num_uniformity_scales=1)
-model.compile()
-model(x_init)
-
-learned_generator = _parse_learned_generator()
-if specs["model_params"]["use_zero_padding"]:
-    learned_generator = learned_generator[specs["data_generator_params"]["waveform_timesteps"]:-specs["data_generator_params"]["waveform_timesteps"], 
-                                          specs["data_generator_params"]["waveform_timesteps"]:-specs["data_generator_params"]["waveform_timesteps"]]
-
-group_convolution_matrix = _parse_group_convolution_matrix()
-    
-ideal_generator = _find_ideal_circulant_translation_generator(learned_generator, circulant=False)
-ideal_group_convolution_matrix = _find_ideal_group_convolution_matrix(group_convolution_matrix)
-
-cosine_similarity = _matrix_cosine_similarity(learned_generator, ideal_generator)
+learned_generator = _parse_learned_generator(best_epoch)
+ideal_generator = _find_ideal_circulant_translation_generator(learned_generator)
 
 print(f"Cosine similarity: {_matrix_cosine_similarity(learned_generator, ideal_generator)}")
+print(f"Best epoch:{best_epoch}")
 
 _make_output_dirs()
-_plot_matrix_comparison(ideal_generator, 
-                        learned_generator, 
-                        join(_get_snapshot_dir(), f"generator_comparison.png"))
-
-_plot_matrix_comparison(ideal_group_convolution_matrix, 
-                        group_convolution_matrix, 
-                        join(_get_snapshot_dir(), f"group_convolution_matrix_comparison.png"))
-
-
+_plot_generator_matrix_comparison(ideal_generator, 
+                                  learned_generator, 
+                                  join(_get_snapshot_dir(), f"generator_comparison.png"))
 
